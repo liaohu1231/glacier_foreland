@@ -72,7 +72,7 @@ p <- ggplot(sample_site_v, aes(PCoA1, PCoA2)) +
   guides(fill = guide_legend(override.aes = list(size = 5, shape = 21)))
 p
 
-##Candidatus_Methylomirabilis
+##Candidatus_Desulfobacterota
 tmp=strsplit(bacteria_taxonomy$classification,split = ";")
 tmp=do.call(rbind,tmp)
 bacteria_taxonomy$family=tmp[,5]
@@ -81,51 +81,6 @@ abu$class=bacteria_taxonomy[rownames(abu),22]
 abu$family=bacteria_taxonomy[rownames(abu),23]
 abu$order=bacteria_taxonomy[rownames(abu),24]
 
-Methylomirabilis=abu[grep("Methylomi",abu$class),]
-apply(Methylomirabilis[,1:24], 2, sum)
-library(reshape2)
-Methylomirabilis$class=as.factor(Methylomirabilis$class)
-Methylomirabilis=melt(as.matrix(Methylomirabilis[,1:24]))
-
-library(ggplot2)
-library(ggsci)
-ggplot(Methylomirabilis,aes(x = Var2,y=value*100,fill=Var1))+
-  geom_bar(stat = "identity",
-           alpha=0.7,width = 0.8)+
-  theme_classic()+
-  theme(axis.text.x = element_text(angle = 60,hjust = 1))+
-  scale_fill_aaas()+
-  labs(y="Relative abundance (%)")
-
-Nitrososphaeria=abu[grep("Nitrososphaeria",abu$class),]
-apply(Nitrososphaeria[,1:24], 2, sum)
-library(reshape2)
-Nitrososphaeria=melt(as.matrix(Nitrososphaeria[,1:24]))
-ggplot(Nitrososphaeria,aes(x = Var2,y=value*100,fill=Var1))+
-  geom_bar(stat = "identity",
-           alpha=0.7,width = 0.8)+
-  theme_classic()+
-  theme(axis.text.x = element_text(angle = 60,hjust = 1))+
-  scale_fill_lancet()+
-  labs(y="Relative abundance (%)")
-
-Nitrospiria=abu[grep("Nitrospiria",abu$class),]
-apply(Nitrospiria[,1:24], 2, sum)
-library(reshape2)
-library(ggplot2)
-library(ggsci)
-Nitrospiria=melt(as.matrix(Nitrospiria[,1:24]))
-ggplot(Nitrospiria,aes(x = Var2,y=value*100,fill=Var1))+
-  geom_bar(stat = "identity",
-           alpha=0.7,width = 0.8)+
-  theme_classic()+
-  theme(axis.text.x = element_text(angle = 60,hjust = 1))+
-  scale_fill_d3()+
-  labs(y="Relative abundance (%)")
-
-ggsave("Nitrospiria.pdf",width = 7.8,height = 4)
-
-abu$phylum=bacteria_taxonomy[rownames(abu),21]
 Desulfobacterota=abu[grep("Desulfobacterota",abu$phylum),]
 Desulfobacterota=melt(as.matrix(Desulfobacterota[,c(1:24)]))
 ggplot(Desulfobacterota,aes(x = Var2,y=value*100,fill=Var1))+
@@ -154,9 +109,7 @@ SOB_sum=data.frame(SOB=apply(SOB[,2:25],2,sum))
 env$SOB_sum=SOB_sum[rownames(env),1]
 
 summary(lm(formula = SOB_sum~Sulfite_2025,env))
-
 summary(lm(formula = SOB_sum~Sulfate_2021,env))
-
 summary(lm(formula = SOB_sum~Sulfate_202505,env))
 
 write.table(shannon,"shannon_index.tsv",sep="\t",quote = F)
@@ -174,213 +127,5 @@ ggplot(env)+
   geom_smooth(aes(SOB_sum,Sulfite_2025),method = "lm")+
   labs(y="Concerntration of Sulfate (mg/kg)",x="Relative abundance of rDSRB")+
   theme_bw()
-##mantel
-mental_matrix=function(x,y){
-  nd=matrix(data = NA,ncol(x),2)
-  for (i in 1:ncol(x)){
-    print(i)
-    scale.env=scale(x[,i],center = T,scale = T)
-    dist_env=dist(scale.env,method="euclidean")
-    abund_env=mantel(xdis = y,ydis = dist_env,method = "spearman",permutations = 9999,na.rm = T)
-    R=cbind(abund_env$statistic,abund_env$signif)
-    print(R)
-    nd[i,]=R
-  }
-  rownames(nd)=colnames(x)
-  colnames(nd)=c("R","p")
-  nd=nd[order(nd[,1],decreasing = T),]
-  nd=as.data.frame(nd)
-  nd$p_adjust=p.adjust(nd$p,method = "fdr")
-  nd=as.data.frame(nd)
-  nd$env=as.factor(rownames(nd))
-  nd$env=factor(nd$env,levels = as.factor(nd$env))
-  return(nd)
-}
-env1=env[,-1]
-mental_matrix(env1[1:9,],t(abu[,1:9]))
-
-##share
-abu_vc_2=abu
-for (i in 1:ncol(abu_vc_2)){
-  col=as.matrix(abu_vc_2[,i])
-  rownames(col)=rownames(abu_vc_2)
-  col=as.matrix(col[col[,1]>1,])
-  colnames(col)=colnames(abu_vc_2)[i]
-  nd=as.matrix(new.cbind(nd,col))
-}
-
-for(i in 1:nrow(nd)){
-  for (j in 1:ncol(nd)){
-    if(is.na(nd[i,j])==FALSE){
-      nd[i,j]=1
-    }
-    else{
-      nd[i,j]=0
-    }
-  }
-}
-
-share=matrix(NA,ncol(nd),ncol(nd))
-for (i in 1:ncol(nd)){
-  for (j in 1:ncol(nd)){
-    print(j)
-    sum=as.matrix(apply(nd[,c(i,j)],1,sum))
-    shared=as.data.frame(nrow(nd[sum==2,]))
-    if(nrow(shared)>0){
-      a=sum(nd[,i])
-      b=sum(nd[,j])
-      viral_shared_content=((shared/a)+(shared/b))/2
-      share[i,j]=viral_shared_content[1,1]
-    }else{
-      share[i,j]==0
-    }
-  }
-}
-
-colnames(share)=colnames(nd)
-rownames(share)=colnames(nd)
-share[is.na(share)]=0
-
-get_lower_tri<-function(cormat){
-  cormat[upper.tri(cormat)] <- NA
-  return(cormat)
-}
-share1=get_lower_tri(share)
-
-group$stage=rep(x = c("early","later"),c(12,12))
-
-library(reshape2)
-share1=melt(share1)
-share1=na.omit(share1)
-share1=share1[share1$value!=1,]
-share1=as.data.frame(share1)
-
-nd=matrix(NA,nrow(share1),1)
-for (i in 1:nrow(share1)){
-  print(i)
-  name=as.matrix(group[grep(share1[i,1],group$sample),4])
-  name_1=as.matrix(group[grep(share1[i,2],group$sample),4])
-  if ( name_1[1,1]==name[1,1]){
-    if (name_1[1,1]=='early'){
-     nd[i,1]='intra_early_stage' 
-    }
-    if (name_1[1,1]=="later"){
-      nd[i,1]='intra_later_stage'
-    }
-  }else{
-    nd[i,1]='inter_stage'
-  }
-
-}
-
-share1$zone=nd
-library(ggplot2)
-library(ggpubr)
-share1=as.data.frame(share1)
-p=ggplot(share1,aes(zone,value))+
-  geom_boxplot(fill="lightblue",outlier.size = 0,outlier.colour = 'white')+
-  geom_jitter(width = 0.1,alpha=0.7,size=2)+
-  theme(axis.text = element_text(color = "black"),
-        axis.title.x = element_blank(),
-        axis.text.x = element_text(angle = 60,size = 10,hjust = 1),
-        legend.key.size = unit(5, 'mm'),
-        legend.text = element_text(size = 10))+
-  theme(panel.grid = element_line(color = 'gray', linetype = 2, size = 0.2), 
-        panel.background = element_rect(color = 'black', fill = 'transparent'), 
-        legend.key = element_rect(fill = 'transparent')) +
-  geom_vline(xintercept = 0, color = 'gray', size = 0.4) + 
-  geom_hline(yintercept = 0, color = 'gray', size = 0.4)
-p
-p+stat_compare_means(value ~ group, data = share1,
-                     method = "wilcox.test",label="p.signif",paired = F,
-                     comparisons =list(c("intra_early_stage","inter_stage"
-                     ),c("intra_later_stage","intra_early_stage")))
-
-share1=get_lower_tri(share)
-
-library(pheatmap)
-annotation_row=as.data.frame(group_non[,c(1,2)])
-rownames(annotation_row)=group_non[,4]
-colnames(annotation_row)=c("type","zone")
-
-pheatmap(share,
-         border_color = "grey",
-         color = colorRampPalette(c("white","black"))(20),
-         cluster_rows = F,cluster_cols = F,
-         clustering_method = "average")
-
-##alpha diversity
-library(vegan)
-chao=estimateR(t(data[,1:24]))[2,]%>%as.data.frame()
-shannon=diversity(t(abu[,1:24]))%>%as.data.frame()
-colnames(shannon)="shannon_index"
-shannon$site=group[rownames(shannon),2]
-shannon_aver=rowsum(shannon$shannon_index,shannon$site)/3
-shannon_aver=as.data.frame(shannon_aver)
-colnames(shannon_aver)="average"
-shannon_aver$SD=tapply(shannon$shannon_index, shannon$site, sd)
-group1=read.csv("../../huge_phage/group1.txt",sep = '\t',header = F,row.names = 1)
-shannon_aver$year=group1[rownames(shannon_aver),1]
-shannon_aver$site=rownames(shannon_aver)
-library(ggplot2)
-ggplot(shannon_aver,aes(x = year,y=average))+
-  geom_point(stat = 'identity',size=4,shape=21,fill="lightblue")+
-  geom_errorbar(aes(ymin=average-SD,ymax=average+SD))+
-  theme_classic()+geom_line()+
-  geom_text(aes(label=site),size=4,vjust=1.7)+
-  labs(y="shannon index")
-shannon$year=group[rownames(shannon),3]
-model <- loess(average ~  year, data = shannon_aver)
-summary(model)
-sum_abu$year=group[rownames(sum_abu),3]
-ggplot(data = shannon_aver,mapping = aes(x = year,y=average))+
-  theme_classic()+
-  labs(y="shannon index")+
-  geom_smooth(method = 'loess', formula = y~x, span = 1,color="red")+
-  geom_point(stat = 'identity',size=4,shape=21,fill="lightblue")+
-  geom_errorbar(aes(ymin=average-SD,ymax=average+SD))+
-  theme_classic()+geom_line()+
-  geom_text(aes(label=site),size=4,vjust=1.7)+
-  labs(y="shannon index")
-ggplot()+
-  theme_classic()+
-  labs(y="Accumulative abundance")+
-  geom_smooth(data =sum_abu,mapping = aes(x = year,y=sum_abu),
-              method = 'loess', formula = y~x, span = 1,color="red")
-
-####kraken
-kraken=read.csv("all.final_report.profile",header = 1,row.names = 1,check.names = F,sep='\t')
-kraken_order=kraken[grep("o_",rownames(kraken)),]
-kraken_order=kraken_order[-grep("f_",rownames(kraken_order)),]
-kraken_order=kraken_order[-grep("g_",rownames(kraken_order)),]
-kraken_order=kraken_order[-grep("s_",rownames(kraken_order)),]
-kraken_order=relative_abundance(kraken_order)
-kraken_SOB=rbind(
-  kraken_order[grep(pattern = "Acidiferrobacterales",rownames(kraken_order)),]
-)
-kraken_SOB=kraken_SOB*100
-library(ggplot2)
-library(reshape2)
-library(ggsci)
-kraken_SOB=melt(kraken_SOB)
-ggplot(kraken_SOB,aes(Var2,y = value))+
-  geom_bar(stat = 'identity',fill="#1F77B4")+
-  theme_classic()
-kraken_phylum=kraken[grep("p_",rownames(kraken)),]
-kraken_phylum=kraken_phylum[-grep("o_",rownames(kraken_phylum)),]
-kraken_phylum=kraken_phylum[-grep("c_",rownames(kraken_phylum)),]
-kraken_phylum=kraken_phylum[-grep("g_",rownames(kraken_phylum)),]
-kraken_phylum=kraken_phylum[-grep("s_",rownames(kraken_phylum)),]
-
-kraken_phylum=relative_abundance(kraken_phylum)
-sum=apply(kraken_phylum,1,sum)
-kraken_phylum=kraken_phylum[order(sum,decreasing = T),]
-kraken_phylum_top10=kraken_phylum[1:10,]
-kraken_phylum_top10=melt(kraken_phylum_top10)
-ggplot(kraken_phylum_top10,aes(Var2,value*100,fill=Var1))+
-  geom_bar(stat = "identity",width = 0.8)+
-  scale_fill_d3()+theme_bw()+
-  theme(axis.text.x.bottom = element_text(angle = 60,hjust = 1))+
-  labs(y="Relative abundance (%)")
   
-  
+
