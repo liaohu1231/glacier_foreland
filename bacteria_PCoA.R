@@ -26,40 +26,6 @@ library(vegan)
 results5=t(abu)
 results5=as.matrix(results5)
 distance <- as.matrix(vegdist(results5, method= "bray",na.rm = T))
-colnames(distance)=rownames(results5)
-rownames(distance)=rownames(results5)
-distance2=matrix(NA,nrow(distance),ncol(distance))
-for(i in 1:nrow(distance)){
-  for(j in 1:ncol(distance)){
-    if ( i != j){
-      distance2[i,j]=distance[i,j]
-    }
-  }
-}
-
-rownames(distance2)=rownames(distance)
-colnames(distance2)=colnames(distance)
-viral_distance=read.table("../viral_distance.tsv",sep='\t',check.names = F)
-mantel(distance2,ydis = viral_distance,permutations = 9999,method = "spearman")
-
-library(pheatmap)
-pheatmap(distance2,cluster_rows = F,cluster_cols = F,clustering_method = "average",
-         na_col = "lightblue",border_color = F,cellwidth = 10,cellheight = 8,
-         color = colorRampPalette(c("white",
-                                    "white",
-                                    "white",
-                                    "white",
-                                    "#40CCA7"))(30))
-
-library(reshape2)
-bac_dist=melt(as.matrix(distance2))
-vir_dist=melt(as.matrix(viral_distance))
-bac_dist$vir_dist=vir_dist$value
-ggplot(bac_dist,aes(value,vir_dist))+
-  geom_point(alpha=0.8,shape=21,fill="green")+
-  geom_smooth(formula = y~x,method = "lm",inherit.aes = T,color="red")+
-  theme_bw()+labs(x="Bray distance among genome-centric \nmicrobial communities",
-                  y="Bray distance among \nviral communities")
 
 summary(lm(formula = value~vir_dist,data = bac_dist))
 
@@ -71,13 +37,11 @@ sample_site_v$names <- rownames(sample_site_v)
 names(sample_site_v)[1:3] <- c('PCoA1', 'PCoA2','PCoA3')
 rownames(group)=group$sample
 sample_site_v$site = group[rownames(sample_site_v),2]
-sample_site_v$stage=rep(c("early","late"),c(12,12))
+sample_site_v$stage=rep(c("early","late"),c(9,15))
 write.table(sample_site_v,"viral_pcoa123.txt",sep = '\t',quote = F)
 
 library(vegan)
-
 dist = vegdist(t(abu), method = 'bray',na.rm = T)
-
 p_value=anosim(x= dist,grouping = sample_site_v$stage,permutations = 9999)
 summary(p_value)
 p_value=anosim(x= dist,grouping = sample_site_v$site,permutations = 9999)
@@ -116,6 +80,7 @@ bacteria_taxonomy$order=tmp[,4]
 abu$class=bacteria_taxonomy[rownames(abu),22]
 abu$family=bacteria_taxonomy[rownames(abu),23]
 abu$order=bacteria_taxonomy[rownames(abu),24]
+
 Methylomirabilis=abu[grep("Methylomi",abu$class),]
 apply(Methylomirabilis[,1:24], 2, sum)
 library(reshape2)
@@ -171,10 +136,12 @@ ggplot(Desulfobacterota,aes(x = Var2,y=value*100,fill=Var1))+
   scale_fill_d3(palette = "category20c")+
   labs(y="Relative abundance (%)")
 
-Sulfur_oxider=abu[c(grep("Acidiferrobacterales",abu$order),grep("Sulfuricellaceae",abu$family)),]
-apply(Sulfur_oxider[,1:24],2,sum)
+##SOB
+SOB=read.table("SOB.txt",sep='\t',header = 1,row.names = 1)
+SOB=as.data.frame(SOB)
+SOB[,2:29]=abu[rownames(SOB),1:28]
 library(reshape2)
-Sulfur_oxider=melt(Sulfur_oxider[,c(1:24,29)])
+Sulfur_oxider=melt(SOB[,c(2:29)])
 ggplot(Sulfur_oxider,aes(x = variable,y=value*100,fill=order))+
   geom_bar(stat = "identity",
            alpha=0.7,width = 0.8)+
@@ -182,6 +149,55 @@ ggplot(Sulfur_oxider,aes(x = variable,y=value*100,fill=order))+
   theme(axis.text.x = element_text(angle = 60,hjust = 1))+
   scale_fill_d3()+
   labs(y="Relative abundance (%)")
+env=read.table("../../202505批次/sulfate.txt",header = 1,row.names = 1,sep='\t',check.names = F)
+SOB_sum=data.frame(SOB=apply(SOB[,2:25],2,sum))
+env$SOB_sum=SOB_sum[rownames(env),1]
+
+summary(lm(formula = SOB_sum~Sulfite_2025,env))
+
+summary(lm(formula = SOB_sum~Sulfate_2021,env))
+
+summary(lm(formula = SOB_sum~Sulfate_202505,env))
+
+write.table(shannon,"shannon_index.tsv",sep="\t",quote = F)
+env$stage=rep(c("S1-S3","S4-S8"),c(9,15))
+library(ggplot2)
+ggplot(env)+
+  geom_point(mapping = aes(SOB_sum,Sulfate_2021,fill = stage),shape=21,size=2)+
+  geom_point(aes(SOB_sum,Sulfate_202505,fill = stage),shape=22,size=2)+
+  geom_smooth(aes(SOB_sum,Sulfate_2021),method = "lm")+
+  geom_smooth(aes(SOB_sum,Sulfate_202505),method = "lm")+
+  labs(y="Concerntration of Sulfate (mg/kg)",x="Relative abundance of rDSRB")+
+  theme_bw()
+ggplot(env)+
+  geom_point(mapping = aes(SOB_sum,Sulfite_2025,fill = stage),shape=21,size=2)+
+  geom_smooth(aes(SOB_sum,Sulfite_2025),method = "lm")+
+  labs(y="Concerntration of Sulfate (mg/kg)",x="Relative abundance of rDSRB")+
+  theme_bw()
+##mantel
+mental_matrix=function(x,y){
+  nd=matrix(data = NA,ncol(x),2)
+  for (i in 1:ncol(x)){
+    print(i)
+    scale.env=scale(x[,i],center = T,scale = T)
+    dist_env=dist(scale.env,method="euclidean")
+    abund_env=mantel(xdis = y,ydis = dist_env,method = "spearman",permutations = 9999,na.rm = T)
+    R=cbind(abund_env$statistic,abund_env$signif)
+    print(R)
+    nd[i,]=R
+  }
+  rownames(nd)=colnames(x)
+  colnames(nd)=c("R","p")
+  nd=nd[order(nd[,1],decreasing = T),]
+  nd=as.data.frame(nd)
+  nd$p_adjust=p.adjust(nd$p,method = "fdr")
+  nd=as.data.frame(nd)
+  nd$env=as.factor(rownames(nd))
+  nd$env=factor(nd$env,levels = as.factor(nd$env))
+  return(nd)
+}
+env1=env[,-1]
+mental_matrix(env1[1:9,],t(abu[,1:9]))
 
 ##share
 abu_vc_2=abu
